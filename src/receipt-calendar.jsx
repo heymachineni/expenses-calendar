@@ -677,7 +677,7 @@ const ReceiptCalendar = () => {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '8px',
+            marginBottom: '16px',
             padding: '8px 0',
             pointerEvents: isPrinting ? 'none' : 'auto',
             opacity: isPrinting ? 0.7 : 1,
@@ -736,17 +736,6 @@ const ReceiptCalendar = () => {
             >
               {'>>'}
             </button>
-          </div>
-
-          <div style={{
-            fontSize: '7px',
-            color: '#888',
-            textAlign: 'center',
-            letterSpacing: '0.04em',
-            marginBottom: '10px',
-            lineHeight: 1.4,
-          }}>
-            Swipe left · next month · swipe right · previous
           </div>
           
           {/* Column headers like receipt items */}
@@ -1321,12 +1310,6 @@ const ReceiptCalendar = () => {
               THANK YOU FOR YOUR TIME!
             </div>
             <div>PLEASE COME AGAIN</div>
-            <div style={{ marginTop: '8px', fontSize: '9px' }}>
-              *** NO REFUNDS ON TIME ***
-            </div>
-            <div style={{ marginTop: '4px', fontSize: '9px' }}>
-              CUSTOMER COPY
-            </div>
           </div>
         </div>
         
