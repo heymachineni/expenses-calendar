@@ -1,10 +1,10 @@
-const CACHE_NAME = 'expenses-calendar-v1';
+const CACHE_NAME = 'expenses-calendar-v2-root';
 const urlsToCache = [
-  '/expenses-calendar/',
-  '/expenses-calendar/index.html',
-  '/expenses-calendar/manifest.json',
-  '/expenses-calendar/icons/icon-192.png',
-  '/expenses-calendar/icons/icon-512.png'
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
 ];
 
 // Install event - cache files
@@ -71,7 +71,7 @@ self.addEventListener('fetch', (event) => {
       })
       .catch(() => {
         // If both cache and network fail, show offline page
-        return caches.match('/expenses-calendar/index.html');
+        return caches.match('/index.html');
       })
   );
 });

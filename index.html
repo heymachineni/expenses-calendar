@@ -15,10 +15,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Receipts" />
-    <link rel="apple-touch-icon" href="/expenses-calendar/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="%BASE_URL%icons/icon-192.png" />
 
     <!-- PWA Manifest -->
-    <link rel="manifest" href="/expenses-calendar/manifest.json" />
+    <link rel="manifest" href="%BASE_URL%manifest.json" />
 
     <style>
       * {
@@ -36,7 +36,7 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/expenses-calendar/sw.js')
+          navigator.serviceWorker.register('%BASE_URL%sw.js')
             .then((registration) => {
               console.log('SW registered:', registration.scope);
             })

@@ -37,7 +37,7 @@ npm install
 npm run dev
 ```
 
-Open the URL Vite prints (with this repo’s `base`, paths live under **`/expenses-calendar/`**).
+Open the URL Vite prints. The app’s **`base` is `/`**, so the dev server serves from the root path.
 
 If `vite --host` errors on your machine (network interface enumeration), bind loopback only:
 
@@ -52,13 +52,15 @@ npm run build
 npm run preview
 ```
 
-**Deploy (GitHub Pages)**
+## Deploy
+
+**Vercel (recommended)** — With `base: '/'`, connect the repo and use the default **Build**: `npm run build`, **Output**: `dist`. No extra config required.
+
+**GitHub Pages (`https://<user>.github.io/<repo>/`)** — That URL includes a **subpath**. Set `base: '/<repo-name>/'` in `vite.config.js` and use the **same** prefix in `public/manifest.json`, `public/sw.js`, and any hard-coded links (or build with `vite build --base /<repo-name>/` and keep those files in sync). Then:
 
 ```bash
 npm run deploy
 ```
-
-Ensure `base` in `vite.config.js` matches your Pages path (e.g. `/<repo-name>/`).
 
 ---
 
