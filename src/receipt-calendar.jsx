@@ -1,0 +1,1426 @@
+import React, { useState, useEffect, useRef } from 'react';
+
+// Expense categories
+const CATEGORIES = [
+  { id: 'food', name: 'Food & Dining', color: '#4caf50' },
+  { id: 'grocery', name: 'Grocery', color: '#8bc34a' },
+  { id: 'coffee', name: 'Coffee & Drinks', color: '#795548' },
+  { id: 'rent', name: 'Rent', color: '#3f51b5' },
+  { id: 'subscriptions', name: 'Subscriptions', color: '#00acc1' },
+  { id: 'shopping', name: 'Shopping', color: '#e91e63' },
+  { id: 'healthcare', name: 'Healthcare', color: '#f44336' },
+  { id: 'transport', name: 'Transport', color: '#2196f3' },
+  { id: 'entertainment', name: 'Entertainment', color: '#9c27b0' },
+  { id: 'skincare', name: 'Skincare & Beauty', color: '#ff9800' },
+  { id: 'utilities', name: 'Utilities', color: '#607d8b' },
+  { id: 'other', name: 'Other', color: '#9e9e9e' },
+];
+
+// Auto-detect category from store name
+const detectCategory = (storeName) => {
+  const name = storeName.toLowerCase();
+
+  // Food & Dining
+  if (/chipotle|mcdonald|burger|pizza|restaurant|grill|kitchen|diner|cafe|bistro|sushi|thai|chinese|mexican|indian|panera|subway|wendy|taco/i.test(name)) {
+    return 'food';
+  }
+  // Coffee
+  if (/starbucks|coffee|dunkin|peet|cafe|tea|boba/i.test(name)) {
+    return 'coffee';
+  }
+  // Grocery
+  if (/whole foods|trader joe|safeway|kroger|walmart|target|costco|grocery|market|fresh|aldi|publix|wegmans|amazon fresh/i.test(name)) {
+    return 'grocery';
+  }
+  // Rent
+  if (/\brent\b|landlord|lease|housing society|flat deposit|pg\b|room rent|monthly rent/i.test(name)) {
+    return 'rent';
+  }
+  // Subscriptions (before entertainment — overlaps streaming / software)
+  if (/netflix|spotify|youtube premium|apple music|amazon prime|prime membership|disney\+|hotstar|zee5|sony liv|subscription|recurring|icloud|google one|chatgpt|openai|notion|github|figma|adobe creative|saas/i.test(name)) {
+    return 'subscriptions';
+  }
+  // Healthcare
+  if (/cvs|walgreens|pharmacy|rite aid|drug|medical|doctor|clinic|hospital/i.test(name)) {
+    return 'healthcare';
+  }
+  // Skincare & Beauty
+  if (/sephora|ulta|beauty|skincare|cosmetic|salon|spa|nail|hair/i.test(name)) {
+    return 'skincare';
+  }
+  // Shopping
+  if (/amazon|nordstrom|macy|gap|zara|h&m|uniqlo|nike|adidas|apple|best buy|mall|shop|store|outlet/i.test(name)) {
+    return 'shopping';
+  }
+  // Transport
+  if (/uber|lyft|taxi|gas|shell|chevron|exxon|parking|transit|metro/i.test(name)) {
+    return 'transport';
+  }
+  // Entertainment
+  if (/netflix|spotify|movie|theater|cinema|concert|game|steam|playstation|xbox/i.test(name)) {
+    return 'entertainment';
+  }
+  // Utilities
+  if (/electric|water|gas|internet|phone|verizon|at&t|comcast|utility/i.test(name)) {
+    return 'utilities';
+  }
+
+  return 'other';
+};
+
+const ReceiptCalendar = () => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [isPrinting, setIsPrinting] = useState(true);
+  const [printProgress, setPrintProgress] = useState(0);
+  const [showPrinter, setShowPrinter] = useState(true);
+  const [confetti, setConfetti] = useState([]);
+  const [fortuneMessage, setFortuneMessage] = useState(null);
+
+  // Expense tracking state
+  const [expenses, setExpenses] = useState(() => {
+    const saved = localStorage.getItem('receiptCalendarExpenses');
+    return saved ? JSON.parse(saved) : {};
+  });
+  const [showAddExpense, setShowAddExpense] = useState(false);
+  const [newExpense, setNewExpense] = useState({
+    storeName: '',
+    category: 'other',
+    items: [{ name: '', price: '' }],
+  });
+  const [showMonthlyBreakdown, setShowMonthlyBreakdown] = useState(false);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+
+  const calendarSwipeRef = useRef(null);
+
+  // Save expenses to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('receiptCalendarExpenses', JSON.stringify(expenses));
+  }, [expenses]);
+
+  // Get expense key for a date
+  const getExpenseKey = (year, month, day) => `${year}-${month}-${day}`;
+
+  // Get expenses for selected date
+  const getExpensesForDate = (day) => {
+    if (!day) return [];
+    const key = getExpenseKey(currentDate.getFullYear(), currentDate.getMonth(), day);
+    return expenses[key] || [];
+  };
+
+  // Get total for a date
+  const getTotalForDate = (day) => {
+    const dayExpenses = getExpensesForDate(day);
+    return dayExpenses.reduce((sum, exp) => sum + exp.items.reduce((s, item) => s + (parseFloat(item.price) || 0), 0), 0);
+  };
+
+  // Get monthly total (real expenses only)
+  const getMonthlyTotal = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    let total = 0;
+
+    for (let day = 1; day <= getDaysInMonth(currentDate); day++) {
+      const key = getExpenseKey(year, month, day);
+      const dayExpenses = expenses[key] || [];
+      dayExpenses.forEach(exp => {
+        exp.items.forEach(item => {
+          total += parseFloat(item.price) || 0;
+        });
+      });
+    }
+    return total;
+  };
+
+  // Get monthly transaction count (real transactions only)
+  const getMonthlyTransactionCount = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    let count = 0;
+
+    for (let day = 1; day <= getDaysInMonth(currentDate); day++) {
+      const key = getExpenseKey(year, month, day);
+      const dayExpenses = expenses[key] || [];
+      count += dayExpenses.length;
+    }
+    return count;
+  };
+
+  // Get monthly breakdown by category (real expenses only)
+  const getMonthlyBreakdown = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+
+    const breakdown = {};
+    CATEGORIES.forEach(cat => {
+      breakdown[cat.id] = 0;
+    });
+
+    for (let day = 1; day <= getDaysInMonth(currentDate); day++) {
+      const key = getExpenseKey(year, month, day);
+      const dayExpenses = expenses[key] || [];
+      dayExpenses.forEach(exp => {
+        const category = exp.category || 'other';
+        const total = exp.items.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
+        breakdown[category] = (breakdown[category] || 0) + total;
+      });
+    }
+
+    // Convert to sorted array with percentages
+    const total = Object.values(breakdown).reduce((sum, val) => sum + val, 0);
+    return CATEGORIES
+      .map(cat => ({
+        ...cat,
+        amount: breakdown[cat.id] || 0,
+        percentage: total > 0 ? ((breakdown[cat.id] || 0) / total) * 100 : 0,
+      }))
+      .filter(cat => cat.amount > 0)
+      .sort((a, b) => b.amount - a.amount);
+  };
+
+  // Add new expense
+  const addExpense = () => {
+    if (!selectedDate || !newExpense.storeName) return;
+
+    const key = getExpenseKey(currentDate.getFullYear(), currentDate.getMonth(), selectedDate);
+    const expense = {
+      id: Date.now(),
+      storeName: newExpense.storeName,
+      category: newExpense.category || 'other',
+      items: newExpense.items.filter(item => item.name && item.price),
+      timestamp: new Date().toISOString(),
+    };
+
+    setExpenses(prev => ({
+      ...prev,
+      [key]: [...(prev[key] || []), expense],
+    }));
+
+    setNewExpense({ storeName: '', category: 'other', items: [{ name: '', price: '' }] });
+    setShowAddExpense(false);
+    setShowCategoryDropdown(false);
+  };
+
+  // Delete expense
+  const deleteExpense = (expenseId) => {
+    const key = getExpenseKey(currentDate.getFullYear(), currentDate.getMonth(), selectedDate);
+    setExpenses(prev => ({
+      ...prev,
+      [key]: (prev[key] || []).filter(exp => exp.id !== expenseId),
+    }));
+  };
+
+  // Add item row to new expense
+  const addItemRow = () => {
+    setNewExpense(prev => ({
+      ...prev,
+      items: [...prev.items, { name: '', price: '' }],
+    }));
+  };
+
+  // Update item in new expense
+  const updateItem = (index, field, value) => {
+    setNewExpense(prev => ({
+      ...prev,
+      items: prev.items.map((item, i) => i === index ? { ...item, [field]: value } : item),
+    }));
+  };
+
+  // Remove item row
+  const removeItemRow = (index) => {
+    if (newExpense.items.length > 1) {
+      setNewExpense(prev => ({
+        ...prev,
+        items: prev.items.filter((_, i) => i !== index),
+      }));
+    }
+  };
+
+  // Fortune cookie messages / positive quotes
+  const fortunes = [
+    "Time you enjoy wasting is not wasted time.",
+    "Today is a gift. That's why it's called the present.",
+    "The best time to plant a tree was yesterday. The second best time is now.",
+    "Your future is created by what you do today.",
+    "Every day is a second chance.",
+    "Be the energy you want to attract.",
+    "Small steps every day lead to big changes.",
+    "You are exactly where you need to be.",
+    "Good things take time. Be patient.",
+    "Your only limit is your mind.",
+    "Make today so awesome that yesterday gets jealous.",
+    "The secret of getting ahead is getting started.",
+    "Believe you can and you're halfway there.",
+    "Stars can't shine without darkness.",
+    "What you seek is seeking you.",
+    "Be a voice, not an echo.",
+    "Dream big. Start small. Act now.",
+    "Happiness is homemade.",
+  ];
+
+  const revealFortune = () => {
+    const randomFortune = fortunes[Math.floor(Math.random() * fortunes.length)];
+    setFortuneMessage(randomFortune);
+  };
+
+  // Indian holidays (month is 0-indexed) — 2026; lunar/Islamic dates are approximate until official announcements
+  const indianHolidays = [
+    { month: 0, day: 26, name: 'Republic Day' },
+    { month: 2, day: 8, name: 'Holi' },
+    { month: 2, day: 21, name: 'Eid al-Fitr (approx.)' },
+    { month: 3, day: 3, name: 'Good Friday' },
+    { month: 4, day: 27, name: 'Eid al-Adha (Bakrid)' },
+    { month: 7, day: 15, name: 'Independence Day' },
+    { month: 7, day: 28, name: 'Raksha Bandhan' },
+    { month: 8, day: 5, name: 'Onam (Thiruvonam)' },
+    { month: 9, day: 2, name: 'Gandhi Jayanti' },
+    { month: 9, day: 20, name: 'Dussehra (Vijayadashami)' },
+    { month: 10, day: 8, name: 'Diwali' },
+    { month: 10, day: 24, name: 'Guru Nanak Jayanti' },
+    { month: 11, day: 25, name: 'Christmas' },
+  ];
+
+  const isHoliday = (day) => {
+    return indianHolidays.find(h => h.month === currentDate.getMonth() && h.day === day);
+  };
+
+  // Confetti effect
+  const triggerConfetti = () => {
+    const colors = ['#ff6b6b', '#4ecdc4', '#ffe66d', '#95e1d3', '#f38181', '#aa96da'];
+    const newConfetti = [];
+    for (let i = 0; i < 50; i++) {
+      newConfetti.push({
+        id: i,
+        x: Math.random() * 100,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        delay: Math.random() * 0.5,
+        size: Math.random() * 8 + 4,
+        rotation: Math.random() * 360,
+      });
+    }
+    setConfetti(newConfetti);
+    setTimeout(() => setConfetti([]), 3000);
+  };
+  
+  const months = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 
+                  'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+  const days = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+  
+  // Printing animation - slow, steady feed (thermal printer feel)
+  useEffect(() => {
+    if (isPrinting) {
+      const duration = 12500; // ~12.5s — receipt emerges slowly
+      let startTime = null;
+      let animationId = null;
+
+      const animate = (timestamp) => {
+        if (!startTime) startTime = timestamp;
+        const elapsed = timestamp - startTime;
+        const linearProgress = Math.min(elapsed / duration, 1);
+
+        // Gentle ease-in-out so motion stays slow and readable, not abrupt at the end
+        const easedProgress = linearProgress * linearProgress * (3 - 2 * linearProgress);
+        setPrintProgress(easedProgress * 100);
+
+        if (linearProgress < 1) {
+          animationId = requestAnimationFrame(animate);
+        } else {
+          setPrintProgress(100);
+          setTimeout(() => {
+            setIsPrinting(false);
+            const t = new Date();
+            setCurrentDate(new Date(t.getFullYear(), t.getMonth(), 1));
+            setSelectedDate(t.getDate());
+          }, 200);
+        }
+      };
+
+      animationId = requestAnimationFrame(animate);
+
+      return () => {
+        if (animationId) cancelAnimationFrame(animationId);
+      };
+    }
+  }, [isPrinting]);
+  
+  const handleReprint = () => {
+    setPrintProgress(0);
+    setIsPrinting(true);
+    setShowPrinter(true);
+    setSelectedDate(null);
+    setFortuneMessage(null);
+  };
+  
+  const getDaysInMonth = (date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  };
+  
+  const getFirstDayOfMonth = (date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  };
+  
+  const generateCalendarDays = () => {
+    const daysInMonth = getDaysInMonth(currentDate);
+    const firstDay = getFirstDayOfMonth(currentDate);
+    const days = [];
+    
+    for (let i = 0; i < firstDay; i++) {
+      days.push(null);
+    }
+    
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(i);
+    }
+    
+    return days;
+  };
+  
+  const defaultSelectedDayForMonth = (year, month) => {
+    const t = new Date();
+    if (t.getFullYear() === year && t.getMonth() === month) {
+      return t.getDate();
+    }
+    return 1;
+  };
+
+  const prevMonth = () => {
+    const d = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+    setCurrentDate(d);
+    setSelectedDate(defaultSelectedDayForMonth(d.getFullYear(), d.getMonth()));
+  };
+
+  const nextMonth = () => {
+    const d = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+    setCurrentDate(d);
+    setSelectedDate(defaultSelectedDayForMonth(d.getFullYear(), d.getMonth()));
+  };
+
+  const onCalendarSwipeStart = (e) => {
+    if (isPrinting) return;
+    const t = e.touches[0];
+    calendarSwipeRef.current = { x0: t.clientX, y0: t.clientY };
+  };
+
+  const onCalendarSwipeEnd = (e) => {
+    if (isPrinting || !calendarSwipeRef.current) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - calendarSwipeRef.current.x0;
+    const dy = t.clientY - calendarSwipeRef.current.y0;
+    calendarSwipeRef.current = null;
+    const minSwipe = 48;
+    if (Math.abs(dx) < minSwipe || Math.abs(dx) < Math.abs(dy) * 1.15) return;
+    if (dx < 0) nextMonth();
+    else prevMonth();
+  };
+  
+  const isToday = (day) => {
+    const today = new Date();
+    return day === today.getDate() &&
+           currentDate.getMonth() === today.getMonth() &&
+           currentDate.getFullYear() === today.getFullYear();
+  };
+
+  const generateBarcode = () => {
+    // Generate a realistic barcode pattern with varying bar widths
+    const patterns = [
+      [2,1,2,2,2,1], [2,2,2,1,2,1], [2,2,2,1,1,2], [1,2,1,2,2,2],
+      [1,2,2,2,2,1], [1,1,2,2,2,2], [2,1,2,1,2,2], [2,1,2,2,1,2],
+      [2,2,2,2,1,1], [1,1,1,3,2,2], [1,1,2,3,1,2], [1,2,1,3,1,2],
+    ];
+
+    const bars = [];
+    // Extended code for more bars - repeat date info and add extra digits
+    const baseCode = `${currentDate.getFullYear()}${(currentDate.getMonth() + 1).toString().padStart(2, '0')}${getDaysInMonth(currentDate)}`;
+    const code = baseCode + baseCode.split('').reverse().join('') + '0123456789';
+
+    // Start pattern
+    bars.push({ width: 2, black: true });
+    bars.push({ width: 1, black: false });
+    bars.push({ width: 1, black: true });
+    bars.push({ width: 1, black: false });
+
+    // Generate bars based on date digits
+    for (let i = 0; i < code.length; i++) {
+      const digit = parseInt(code[i]);
+      const pattern = patterns[digit % patterns.length];
+      pattern.forEach((width, idx) => {
+        bars.push({ width, black: idx % 2 === 0 });
+      });
+    }
+
+    // End pattern
+    bars.push({ width: 2, black: true });
+    bars.push({ width: 1, black: false });
+    bars.push({ width: 1, black: true });
+    bars.push({ width: 2, black: false });
+    bars.push({ width: 1, black: true });
+
+    return bars;
+  };
+
+  const calendarDays = generateCalendarDays();
+  const receiptHeight = 1200; // Height for full receipt including torn edge
+  
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #2c2c2c 0%, #1a1a1a 100%)',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+      padding: '20px 20px 40px',
+      fontFamily: '"Courier New", Courier, monospace',
+      overflow: 'hidden',
+    }}>
+      {/* Printer Housing */}
+      <div style={{
+        width: '400px',
+        position: 'relative',
+        zIndex: 10,
+      }}>
+        {/* Printer Body */}
+        <div style={{
+          background: 'linear-gradient(180deg, #4a4a4a 0%, #2a2a2a 100%)',
+          height: '80px',
+          borderRadius: '12px 12px 0 0',
+          boxShadow: '0 -4px 20px rgba(0,0,0,0.5), inset 0 2px 4px rgba(255,255,255,0.1)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'relative',
+        }}>
+          {/* Printer Label */}
+          <div style={{
+            color: '#888',
+            fontSize: '10px',
+            letterSpacing: '4px',
+            position: 'absolute',
+            top: '12px',
+          }}>
+            THERMAL-PRINT 3000
+          </div>
+          
+          {/* Status Light */}
+          <div style={{
+            position: 'absolute',
+            top: '12px',
+            right: '20px',
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            background: isPrinting ? '#4ade80' : '#666',
+            boxShadow: isPrinting ? '0 0 10px #4ade80' : 'none',
+            animation: isPrinting ? 'blink 0.5s infinite' : 'none',
+          }} />
+          
+          {/* Paper Slot */}
+          <div style={{
+            position: 'absolute',
+            bottom: '0',
+            width: '360px',
+            height: '12px',
+            background: 'linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%)',
+            borderRadius: '2px',
+            boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.8)',
+            overflow: 'hidden',
+          }}>
+            {/* Paper Roll visible inside slot */}
+            <div style={{
+              position: 'absolute',
+              top: '2px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '320px',
+              height: '20px',
+              background: 'linear-gradient(180deg, #e8e5db 0%, #d4d1c7 50%, #c9c6bc 100%)',
+              borderRadius: '50%',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.4), inset 0 -2px 4px rgba(0,0,0,0.1)',
+            }} />
+          </div>
+        </div>
+        
+        {/* Receipt Container - clips the receipt */}
+        <div style={{
+          position: 'relative',
+          height: isPrinting ? `${(printProgress / 100) * receiptHeight}px` : 'auto',
+          overflow: 'hidden',
+        }}>
+          {/* Confetti */}
+          {confetti.map(c => (
+            <div
+              key={c.id}
+              style={{
+                position: 'absolute',
+                left: `${c.x}%`,
+                top: '-20px',
+                width: `${c.size}px`,
+                height: `${c.size}px`,
+                background: c.color,
+                borderRadius: c.size > 6 ? '2px' : '50%',
+                transform: `rotate(${c.rotation}deg)`,
+                animation: `confettiFall 2.5s ease-out ${c.delay}s forwards`,
+                zIndex: 100,
+              }}
+            />
+          ))}
+
+          {/* The Receipt */}
+          <div
+            style={{
+              background: '#f5f2e8',
+              width: '340px',
+              margin: '0 auto',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.1)',
+              position: 'relative',
+              borderRadius: '0 0 2px 2px',
+              transform: isPrinting
+                ? `translateY(${-receiptHeight + (printProgress / 100) * receiptHeight}px)`
+                : 'translateY(0)',
+            }}
+          >
+            {/* Paper texture overlay */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                opacity: 0.08,
+                backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+                pointerEvents: 'none',
+                mixBlendMode: 'multiply',
+              }}
+            />
+        
+        <div style={{ padding: '20px 24px' }}>
+          {/* Store header */}
+          <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+            <div style={{
+              fontSize: '22px',
+              fontWeight: 'bold',
+              letterSpacing: '5px',
+              color: '#1a1a1a',
+              lineHeight: 1.15,
+            }}>
+              EXPENSES
+            </div>
+            <div style={{
+              fontSize: '26px',
+              fontWeight: 'bold',
+              letterSpacing: '7px',
+              color: '#1a1a1a',
+              marginTop: '2px',
+            }}>
+              CALENDAR
+            </div>
+            <div style={{
+              fontSize: '10px',
+              letterSpacing: '0.5px',
+              color: '#777',
+              marginTop: '10px',
+              lineHeight: 1.4,
+            }}>
+              Daily spending, one day at a time.
+            </div>
+          </div>
+          
+          {/* Divider */}
+          <div style={{
+            borderTop: '2px dashed #333',
+            margin: '16px 0',
+          }} />
+          
+          {/* Transaction info */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontSize: '11px',
+            color: '#444',
+            marginBottom: '8px',
+          }}>
+            <span>TRX #00{currentDate.getMonth() + 1}{currentDate.getFullYear()}</span>
+            <span>CASHIER: chandu</span>
+          </div>
+          
+          {/* Date/Time */}
+          <div style={{
+            fontSize: '11px',
+            color: '#444',
+            marginBottom: '12px',
+          }}>
+            <div>{new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}, {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit', year: 'numeric' }).toUpperCase()}</div>
+          </div>
+          
+          {/* Divider */}
+          <div style={{
+            borderTop: '1px solid #ddd',
+            margin: '12px 0',
+          }} />
+          
+          {/* Calendar (month + grid): swipe horizontally on touch to change month */}
+          <div
+            style={{ touchAction: 'pan-y' }}
+            onTouchStart={onCalendarSwipeStart}
+            onTouchEnd={onCalendarSwipeEnd}
+          >
+          {/* Month navigation */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '16px',
+            padding: '8px 0',
+            pointerEvents: isPrinting ? 'none' : 'auto',
+            opacity: isPrinting ? 0.7 : 1,
+          }}>
+            <button
+              onClick={prevMonth}
+              style={{
+                background: 'none',
+                border: '1px solid #333',
+                padding: '4px 12px',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: '14px',
+                color: '#333',
+                transition: 'all 0.2s',
+              }}
+              onMouseOver={(e) => {
+                e.target.style.background = '#333';
+                e.target.style.color = '#f5f2e8';
+              }}
+              onMouseOut={(e) => {
+                e.target.style.background = 'none';
+                e.target.style.color = '#333';
+              }}
+            >
+              {'<<'}
+            </button>
+            <div style={{
+              fontSize: '16px',
+              fontWeight: 'bold',
+              letterSpacing: '4px',
+              color: '#1a1a1a',
+            }}>
+              {months[currentDate.getMonth()]} '{currentDate.getFullYear().toString().slice(-2)}
+            </div>
+            <button
+              onClick={nextMonth}
+              style={{
+                background: 'none',
+                border: '1px solid #333',
+                padding: '4px 12px',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: '14px',
+                color: '#333',
+                transition: 'all 0.2s',
+              }}
+              onMouseOver={(e) => {
+                e.target.style.background = '#333';
+                e.target.style.color = '#f5f2e8';
+              }}
+              onMouseOut={(e) => {
+                e.target.style.background = 'none';
+                e.target.style.color = '#333';
+              }}
+            >
+              {'>>'}
+            </button>
+          </div>
+          
+          {/* Column headers like receipt items */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontSize: '10px',
+            color: '#666',
+            borderBottom: '1px dashed #999',
+            paddingBottom: '4px',
+            marginBottom: '8px',
+          }}>
+            <span>ITEM</span>
+            <span>QTY</span>
+            <span>PRICE</span>
+          </div>
+          
+          {/* Day headers */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(7, 1fr)',
+            gap: '2px',
+            marginBottom: '8px',
+          }}>
+            {days.map(day => (
+              <div
+                key={day}
+                style={{
+                  textAlign: 'center',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  color: day === 'SU' || day === 'SA' ? '#999' : '#333',
+                  padding: '4px 0',
+                }}
+              >
+                {day}
+              </div>
+            ))}
+          </div>
+          
+          {/* Calendar grid */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(7, 1fr)',
+            gap: '2px',
+            pointerEvents: isPrinting ? 'none' : 'auto',
+          }}>
+            {calendarDays.map((day, index) => {
+              const holiday = isHoliday(day);
+              const dayTotal = getTotalForDate(day);
+              const hasExpenses = dayTotal > 0;
+              return (
+                <div
+                  key={index}
+                  onClick={() => {
+                    if (day) {
+                      setSelectedDate(day);
+                      setFortuneMessage(null);
+                      setShowAddExpense(false);
+                      if (holiday) triggerConfetti();
+                    }
+                  }}
+                  style={{
+                    textAlign: 'center',
+                    padding: '8px 2px',
+                    cursor: day ? 'pointer' : 'default',
+                    position: 'relative',
+                    background: isToday(day)
+                      ? '#1a1a1a'
+                      : selectedDate === day
+                        ? '#e0ddd3'
+                        : 'transparent',
+                    color: isToday(day)
+                      ? '#f5f2e8'
+                      : holiday
+                        ? '#2e7d32'
+                        : day
+                          ? '#333'
+                          : 'transparent',
+                    transition: 'all 0.15s',
+                    borderRadius: '2px',
+                  }}
+                  onMouseOver={(e) => {
+                    if (day && !isToday(day)) {
+                      e.currentTarget.style.background = '#e8e5db';
+                    }
+                  }}
+                  onMouseOut={(e) => {
+                    if (day && !isToday(day) && selectedDate !== day) {
+                      e.currentTarget.style.background = 'transparent';
+                    }
+                  }}
+                  title={holiday ? holiday.name : hasExpenses ? `₹${dayTotal.toFixed(2)} spent` : ''}
+                >
+                  <div style={{
+                    fontSize: '14px',
+                    fontWeight: isToday(day) || holiday ? 'bold' : 'normal',
+                  }}>
+                    {day ? day.toString().padStart(2, '0') : ''}
+                  </div>
+                  {day && (
+                    <div style={{
+                      fontSize: '8px',
+                      color: isToday(day) ? '#aaa' : '#999',
+                      marginTop: '2px',
+                    }}>
+                      {hasExpenses ? `₹${dayTotal.toFixed(2)}` : ''}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          </div>
+          
+          {/* Selected day — shown after print; pick another day on the grid to change */}
+          {!isPrinting && selectedDate != null && (() => {
+            const selectedHoliday = isHoliday(selectedDate);
+            const dateExpenses = getExpensesForDate(selectedDate);
+            const dateTotal = getTotalForDate(selectedDate);
+            const todayRef = new Date();
+            const isViewingToday =
+              todayRef.getFullYear() === currentDate.getFullYear() &&
+              todayRef.getMonth() === currentDate.getMonth() &&
+              todayRef.getDate() === selectedDate;
+            return (
+              <div style={{
+                background: '#e8e5db',
+                padding: '12px',
+                marginTop: '12px',
+                border: '1px dashed #999',
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexWrap: 'wrap',
+                  gap: '6px',
+                  textAlign: 'center',
+                }}>
+                  <span style={{ fontSize: '14px', fontWeight: 'bold', lineHeight: 1.3 }}>
+                    {months[currentDate.getMonth()]} {selectedDate}, {currentDate.getFullYear()}
+                  </span>
+                  {isViewingToday && (
+                    <span style={{
+                      fontSize: '7px',
+                      fontWeight: 'bold',
+                      letterSpacing: '0.12em',
+                      color: '#f5f2e8',
+                      background: '#333',
+                      padding: '4px 8px',
+                      borderRadius: '3px',
+                      lineHeight: 1,
+                      flexShrink: 0,
+                    }}>
+                      TODAY
+                    </span>
+                  )}
+                </div>
+                {selectedHoliday && (
+                  <div style={{
+                    fontSize: '12px',
+                    color: '#2e7d32',
+                    marginTop: '6px',
+                    fontWeight: 'bold',
+                    letterSpacing: '1px',
+                    textAlign: 'center',
+                  }}>
+                    {selectedHoliday.name.toUpperCase()}
+                  </div>
+                )}
+
+                {/* Expense Section */}
+                <div style={{ marginTop: '12px', borderTop: '1px dashed #999', paddingTop: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '11px', color: '#666' }}>EXPENSES:</span>
+                    <button
+                      onClick={() => {
+                        setShowAddExpense(!showAddExpense);
+                        setShowCategoryDropdown(false);
+                      }}
+                      style={{
+                        background: 'none',
+                        border: '1px solid #666',
+                        padding: '2px 8px',
+                        fontSize: '10px',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        color: '#333',
+                      }}
+                    >
+                      {showAddExpense ? 'CANCEL' : '+ ADD'}
+                    </button>
+                  </div>
+
+                  {/* Add Expense Form */}
+                  {showAddExpense && (
+                    <div style={{ background: '#fff', padding: '10px', marginBottom: '10px', border: '1px solid #ccc', boxSizing: 'border-box' }}>
+                      <input
+                        type="text"
+                        placeholder="Store name"
+                        value={newExpense.storeName}
+                        onChange={(e) => {
+                          const storeName = e.target.value;
+                          setNewExpense(prev => ({
+                            ...prev,
+                            storeName: storeName,
+                            category: detectCategory(storeName),
+                          }));
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '6px',
+                          marginBottom: '8px',
+                          border: '1px solid #ccc',
+                          fontFamily: 'inherit',
+                          fontSize: '11px',
+                          boxSizing: 'border-box',
+                          outline: 'none',
+                        }}
+                        onFocus={(e) => e.target.style.borderColor = '#333'}
+                        onBlur={(e) => e.target.style.borderColor = '#ccc'}
+                      />
+                      {/* Custom Category Dropdown */}
+                      <div style={{ position: 'relative', marginBottom: '8px' }}>
+                        <div
+                          onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                          style={{
+                            width: '100%',
+                            padding: '6px',
+                            border: '1px solid #ccc',
+                            fontFamily: 'inherit',
+                            fontSize: '10px',
+                            boxSizing: 'border-box',
+                            background: '#fff',
+                            color: '#333',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <span>{CATEGORIES.find(c => c.id === newExpense.category)?.name || 'Select category'}</span>
+                          <span style={{ fontSize: '8px' }}>{showCategoryDropdown ? '▲' : '▼'}</span>
+                        </div>
+                        {showCategoryDropdown && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            background: '#f5f2e8',
+                            border: '1px dashed #999',
+                            borderTop: 'none',
+                            zIndex: 100,
+                            maxHeight: '200px',
+                            overflowY: 'auto',
+                          }}>
+                            {CATEGORIES.map(cat => (
+                              <div
+                                key={cat.id}
+                                onClick={() => {
+                                  setNewExpense(prev => ({ ...prev, category: cat.id }));
+                                  setShowCategoryDropdown(false);
+                                }}
+                                style={{
+                                  padding: '6px 8px',
+                                  fontSize: '10px',
+                                  cursor: 'pointer',
+                                  borderBottom: '1px dotted #ccc',
+                                  background: newExpense.category === cat.id ? '#e0ddd3' : 'transparent',
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                }}
+                                onMouseOver={(e) => {
+                                  if (newExpense.category !== cat.id) {
+                                    e.currentTarget.style.background = '#e8e5db';
+                                  }
+                                }}
+                                onMouseOut={(e) => {
+                                  if (newExpense.category !== cat.id) {
+                                    e.currentTarget.style.background = 'transparent';
+                                  }
+                                }}
+                              >
+                                <span>{cat.name}</span>
+                                {newExpense.category === cat.id && <span style={{ fontSize: '10px' }}>✓</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {newExpense.items.map((item, idx) => (
+                        <div key={idx} style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+                          <input
+                            type="text"
+                            placeholder="Item"
+                            value={item.name}
+                            onChange={(e) => updateItem(idx, 'name', e.target.value)}
+                            style={{ flex: 2, padding: '4px', fontSize: '10px', fontFamily: 'inherit', border: '1px solid #ccc', boxSizing: 'border-box', minWidth: 0, outline: 'none' }}
+                            onFocus={(e) => e.target.style.borderColor = '#333'}
+                            onBlur={(e) => e.target.style.borderColor = '#ccc'}
+                          />
+                          <input
+                            type="number"
+                            placeholder="₹"
+                            value={item.price}
+                            onChange={(e) => updateItem(idx, 'price', e.target.value)}
+                            style={{ flex: 1, padding: '4px', fontSize: '10px', fontFamily: 'inherit', border: '1px solid #ccc', boxSizing: 'border-box', minWidth: 0, outline: 'none' }}
+                            onFocus={(e) => e.target.style.borderColor = '#333'}
+                            onBlur={(e) => e.target.style.borderColor = '#ccc'}
+                          />
+                          {newExpense.items.length > 1 && (
+                            <button onClick={() => removeItemRow(idx)} style={{ padding: '4px 8px', fontSize: '10px', cursor: 'pointer', border: '1px solid #ccc', background: '#fff', color: '#333', flexShrink: 0 }}>×</button>
+                          )}
+                        </div>
+                      ))}
+                      <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
+                        <button onClick={addItemRow} style={{ flex: 1, padding: '4px', fontSize: '10px', cursor: 'pointer', fontFamily: 'inherit', border: '1px solid #666', background: '#fff', color: '#333' }}>+ ITEM</button>
+                        <button onClick={addExpense} style={{ flex: 1, padding: '4px', fontSize: '10px', cursor: 'pointer', fontFamily: 'inherit', border: '1px solid #333', background: '#333', color: '#fff' }}>SAVE</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Expense List */}
+                  {dateExpenses.length > 0 ? (
+                    <div>
+                      {dateExpenses.map((expense) => (
+                        <div key={expense.id} style={{ background: '#fff', padding: '8px', marginBottom: '6px', border: '1px solid #ddd' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 'bold' }}>{expense.storeName}</span>
+                            <button
+                              onClick={() => deleteExpense(expense.id)}
+                              style={{ background: 'none', border: 'none', color: '#999', cursor: 'pointer', fontSize: '12px' }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                          {expense.items.map((item, idx) => (
+                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#666', marginTop: '4px' }}>
+                              <span>{item.name}</span>
+                              <span>₹{parseFloat(item.price).toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 'bold', marginTop: '8px', paddingTop: '8px', borderTop: '2px solid #333' }}>
+                        <span>DAY TOTAL:</span>
+                        <span>₹{dateTotal.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  ) : !showAddExpense && (
+                    <div style={{ fontSize: '10px', color: '#999', textAlign: 'center', padding: '10px', lineHeight: 1.45 }}>
+                      <div style={{ fontWeight: 'bold', color: '#666', marginBottom: '4px' }}>No expenses for this day</div>
+                      Tap + ADD to record a purchase, or pick another day on the calendar above.
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Monthly Summary */}
+          <div style={{
+            borderTop: '1px dashed #999',
+            margin: '16px 0 12px',
+            paddingTop: '12px',
+          }}>
+            <div style={{
+              fontSize: '11px',
+              color: '#444',
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginBottom: '4px',
+              }}>
+                <span>TRANSACTIONS:</span>
+                <span>{getMonthlyTransactionCount()}</span>
+              </div>
+            </div>
+
+            <div
+              onClick={() => setShowMonthlyBreakdown(true)}
+              style={{
+                borderTop: '2px solid #333',
+                margin: '12px 0 8px',
+                paddingTop: '12px',
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '16px',
+                fontWeight: 'bold',
+              }}>
+                <span>MONTHLY TOTAL:</span>
+                <span>₹{getMonthlyTotal().toFixed(2)}</span>
+              </div>
+              <div style={{ fontSize: '8px', color: '#999', textAlign: 'center', marginTop: '4px' }}>
+                tap for breakdown
+              </div>
+            </div>
+          </div>
+
+          {/* Monthly Breakdown Modal */}
+          {showMonthlyBreakdown && (
+            <div
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: 'rgba(0,0,0,0.7)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+              }}
+              onClick={() => setShowMonthlyBreakdown(false)}
+            >
+              <div
+                style={{
+                  background: '#f5f2e8',
+                  padding: '20px',
+                  maxWidth: '350px',
+                  width: '90%',
+                  maxHeight: '80vh',
+                  overflow: 'auto',
+                  fontFamily: '"Courier New", monospace',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: 'bold', letterSpacing: '2px' }}>
+                    {months[currentDate.getMonth()].toUpperCase()} {currentDate.getFullYear()}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
+                    SPENDING BREAKDOWN
+                  </div>
+                </div>
+
+                <div style={{ borderTop: '1px dashed #999', paddingTop: '12px' }}>
+                  {getMonthlyBreakdown().map((cat, idx) => (
+                    <div key={cat.id} style={{ marginBottom: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
+                        <span style={{ fontWeight: 'bold' }}>{cat.name}</span>
+                        <span>₹{cat.amount.toFixed(2)}</span>
+                      </div>
+                      <div style={{
+                        height: '8px',
+                        background: '#ddd',
+                        borderRadius: '4px',
+                        overflow: 'hidden',
+                      }}>
+                        <div style={{
+                          width: `${cat.percentage}%`,
+                          height: '100%',
+                          background: '#333',
+                          transition: 'width 0.3s',
+                        }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{
+                  borderTop: '2px solid #333',
+                  marginTop: '16px',
+                  paddingTop: '12px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontWeight: 'bold',
+                  fontSize: '14px',
+                }}>
+                  <span>TOTAL:</span>
+                  <span>₹{getMonthlyTotal().toFixed(2)}</span>
+                </div>
+
+                <button
+                  onClick={() => setShowMonthlyBreakdown(false)}
+                  style={{
+                    width: '100%',
+                    marginTop: '16px',
+                    padding: '10px',
+                    background: '#333',
+                    color: '#fff',
+                    border: 'none',
+                    fontFamily: 'inherit',
+                    fontSize: '11px',
+                    letterSpacing: '2px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  CLOSE
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Barcode */}
+          <div
+            style={{
+              marginTop: '20px',
+              textAlign: 'center',
+              cursor: 'pointer',
+              transition: 'transform 0.2s',
+            }}
+            onClick={revealFortune}
+            onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+            onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            title="Click for a fortune!"
+          >
+            <svg
+              width="100%"
+              height="50"
+              viewBox="0 0 292 50"
+              preserveAspectRatio="none"
+              style={{ display: 'block' }}
+            >
+              {(() => {
+                const bars = generateBarcode();
+                // Calculate scale to fill the width
+                const totalUnits = bars.reduce((sum, bar) => sum + bar.width, 0);
+                const availableWidth = 280;
+                const unitWidth = availableWidth / totalUnits;
+                let x = 6;
+                return bars.map((bar, i) => {
+                  const width = bar.width * unitWidth;
+                  const rect = bar.black ? (
+                    <rect
+                      key={i}
+                      x={x}
+                      y="5"
+                      width={width * 0.65}
+                      height="40"
+                      fill="#1a1a1a"
+                    />
+                  ) : null;
+                  x += width;
+                  return rect;
+                });
+              })()}
+            </svg>
+            <div style={{
+              fontSize: '12px',
+              color: '#333',
+              marginTop: '2px',
+              letterSpacing: '8px',
+              fontWeight: '500',
+            }}>
+              {currentDate.getFullYear()}{(currentDate.getMonth() + 1).toString().padStart(2, '0')}{getDaysInMonth(currentDate)}
+            </div>
+          </div>
+
+          {/* Fortune Message */}
+          {fortuneMessage && (
+            <div style={{
+              marginTop: '16px',
+              padding: '12px',
+              background: 'linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%)',
+              border: '1px dashed #d4a574',
+              borderRadius: '4px',
+              textAlign: 'center',
+              animation: 'fadeIn 0.3s ease-out',
+            }}>
+              <div style={{
+                fontSize: '9px',
+                color: '#a67c52',
+                letterSpacing: '2px',
+                marginBottom: '6px',
+              }}>
+                YOUR FORTUNE
+              </div>
+              <div style={{
+                fontSize: '11px',
+                color: '#5c4033',
+                fontStyle: 'italic',
+                lineHeight: '1.5',
+              }}>
+                "{fortuneMessage}"
+              </div>
+            </div>
+          )}
+          
+          {/* Footer messages */}
+          <div style={{
+            textAlign: 'center',
+            marginTop: '20px',
+            fontSize: '10px',
+            color: '#888',
+            lineHeight: '1.6',
+          }}>
+            <div>- - - - - - - - - - - - - - - -</div>
+            <div style={{ margin: '8px 0' }}>
+              THANK YOU FOR YOUR TIME!
+            </div>
+            <div>PLEASE COME AGAIN</div>
+            <div style={{ marginTop: '8px', fontSize: '9px' }}>
+              *** NO REFUNDS ON TIME ***
+            </div>
+            <div style={{ marginTop: '4px', fontSize: '9px' }}>
+              CUSTOMER COPY
+            </div>
+          </div>
+        </div>
+        
+        {/* Torn paper edge bottom */}
+        <div style={{
+          height: '16px',
+          background: '#f5f2e8',
+          clipPath: 'polygon(0% 0%, 2% 50%, 4% 0%, 6% 60%, 8% 0%, 10% 40%, 12% 0%, 14% 70%, 16% 0%, 18% 50%, 20% 0%, 22% 55%, 24% 0%, 26% 40%, 28% 0%, 30% 65%, 32% 0%, 34% 45%, 36% 0%, 38% 60%, 40% 0%, 42% 35%, 44% 0%, 46% 55%, 48% 0%, 50% 50%, 52% 0%, 54% 65%, 56% 0%, 58% 40%, 60% 0%, 62% 60%, 64% 0%, 66% 45%, 68% 0%, 70% 55%, 72% 0%, 74% 35%, 76% 0%, 78% 65%, 80% 0%, 82% 50%, 84% 0%, 86% 60%, 88% 0%, 90% 40%, 92% 0%, 94% 55%, 96% 0%, 98% 45%, 100% 0%)',
+        }} />
+        
+        {/* Paper curl shadow */}
+        <div style={{
+          position: 'absolute',
+          bottom: '-10px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '90%',
+          height: '20px',
+          background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.2) 0%, transparent 70%)',
+          borderRadius: '50%',
+        }} />
+          </div>
+        </div>
+      </div>
+      
+      {/* Print Again Button */}
+      {!isPrinting && (
+        <button
+          onClick={handleReprint}
+          style={{
+            marginTop: '24px',
+            background: 'none',
+            border: '2px solid #666',
+            color: '#888',
+            padding: '12px 32px',
+            fontFamily: 'inherit',
+            fontSize: '12px',
+            letterSpacing: '4px',
+            cursor: 'pointer',
+            transition: 'all 0.3s',
+            borderRadius: '4px',
+          }}
+          onMouseOver={(e) => {
+            e.target.style.borderColor = '#f5f2e8';
+            e.target.style.color = '#f5f2e8';
+          }}
+          onMouseOut={(e) => {
+            e.target.style.borderColor = '#666';
+            e.target.style.color = '#888';
+          }}
+        >
+          🖨️ PRINT AGAIN
+        </button>
+      )}
+      
+      {/* CSS Animations */}
+      <style>{`
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+        @keyframes confettiFall {
+          0% {
+            transform: translateY(0) rotate(0deg);
+            opacity: 1;
+          }
+          100% {
+            transform: translateY(800px) rotate(720deg);
+            opacity: 0;
+          }
+        }
+        @keyframes fadeIn {
+          0% {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+export default ReceiptCalendar;
