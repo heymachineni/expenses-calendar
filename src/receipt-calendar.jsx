@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 // Expense categories
 const CATEGORIES = [
@@ -11,6 +11,8 @@ const CATEGORIES = [
   { id: 'entertainment', name: 'Entertainment', color: '#9c27b0' },
   { id: 'skincare', name: 'Skincare & Beauty', color: '#ff9800' },
   { id: 'utilities', name: 'Utilities', color: '#607d8b' },
+  { id: 'rent', name: 'Rent', color: '#5c6bc0' },
+  { id: 'subscriptions', name: 'Subscriptions', color: '#00897b' },
   { id: 'other', name: 'Other', color: '#9e9e9e' },
 ];
 
@@ -46,12 +48,20 @@ const detectCategory = (storeName) => {
   if (/uber|lyft|taxi|gas|shell|chevron|exxon|parking|transit|metro/i.test(name)) {
     return 'transport';
   }
+  // Rent (before generic "house" words hit other categories)
+  if (/\brent\b|rental|landlord|lease|housing society|deposit|\bpg\b|flat fee|apartment rent/i.test(name)) {
+    return 'rent';
+  }
+  // Subscriptions & memberships (before entertainment streaming overlap)
+  if (/subscription|subscribe|membership|recurring|prime video|youtube premium|apple music|google one|icloud|dropbox|notion|figma|adobe|saas|annual plan|monthly plan/i.test(name)) {
+    return 'subscriptions';
+  }
   // Entertainment
   if (/netflix|spotify|movie|theater|cinema|concert|game|steam|playstation|xbox/i.test(name)) {
     return 'entertainment';
   }
   // Utilities
-  if (/electric|water|gas|internet|phone|verizon|at&t|comcast|utility/i.test(name)) {
+  if (/electric|water|gas|internet|phone|verizon|at&t|comcast|utility|bsnl|jio|airtel|broadband/i.test(name)) {
     return 'utilities';
   }
 
@@ -80,6 +90,11 @@ const ReceiptCalendar = () => {
   });
   const [showMonthlyBreakdown, setShowMonthlyBreakdown] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+
+  const currentDateRef = useRef(currentDate);
+  currentDateRef.current = currentDate;
+
+  const swipeTouchRef = useRef({ x: 0, y: 0, active: false });
 
   // Save expenses to localStorage whenever they change
   useEffect(() => {
@@ -315,10 +330,12 @@ const ReceiptCalendar = () => {
         } else {
           setPrintProgress(100);
           setTimeout(() => {
+            const cd = currentDateRef.current;
+            const today = new Date();
+            const sameMonth =
+              today.getFullYear() === cd.getFullYear() && today.getMonth() === cd.getMonth();
+            setSelectedDate(sameMonth ? today.getDate() : 1);
             setIsPrinting(false);
-            const t = new Date();
-            setCurrentDate(new Date(t.getFullYear(), t.getMonth(), 1));
-            setSelectedDate(t.getDate());
           }, 200);
         }
       };
@@ -363,24 +380,44 @@ const ReceiptCalendar = () => {
     return days;
   };
   
-  const defaultSelectedDayForMonth = (year, month) => {
-    const t = new Date();
-    if (t.getFullYear() === year && t.getMonth() === month) {
-      return t.getDate();
-    }
-    return 1;
+  const clampDayToMonth = (day, year, monthIndex) => {
+    const dim = new Date(year, monthIndex + 1, 0).getDate();
+    const d = day == null ? 1 : day;
+    return Math.min(Math.max(1, d), dim);
   };
 
   const prevMonth = () => {
-    const d = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
-    setCurrentDate(d);
-    setSelectedDate(defaultSelectedDayForMonth(d.getFullYear(), d.getMonth()));
+    setCurrentDate((prev) => {
+      const next = new Date(prev.getFullYear(), prev.getMonth() - 1, 1);
+      setSelectedDate((d) => clampDayToMonth(d, next.getFullYear(), next.getMonth()));
+      return next;
+    });
   };
 
   const nextMonth = () => {
-    const d = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
-    setCurrentDate(d);
-    setSelectedDate(defaultSelectedDayForMonth(d.getFullYear(), d.getMonth()));
+    setCurrentDate((prev) => {
+      const next = new Date(prev.getFullYear(), prev.getMonth() + 1, 1);
+      setSelectedDate((d) => clampDayToMonth(d, next.getFullYear(), next.getMonth()));
+      return next;
+    });
+  };
+
+  const onCalendarSwipeStart = (e) => {
+    if (isPrinting) return;
+    const t = e.touches[0];
+    swipeTouchRef.current = { x: t.clientX, y: t.clientY, active: true };
+  };
+
+  const onCalendarSwipeEnd = (e) => {
+    if (isPrinting || !swipeTouchRef.current.active) return;
+    swipeTouchRef.current.active = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - swipeTouchRef.current.x;
+    const dy = t.clientY - swipeTouchRef.current.y;
+    const minSwipe = 56;
+    if (Math.abs(dx) < minSwipe || Math.abs(dx) < Math.abs(dy) * 1.1) return;
+    if (dx > 0) prevMonth();
+    else nextMonth();
   };
   
   const isToday = (day) => {
@@ -568,31 +605,32 @@ const ReceiptCalendar = () => {
           {/* Store header */}
           <div style={{ textAlign: 'center', marginBottom: '16px' }}>
             <div style={{
-              fontSize: '22px',
+              fontSize: '15px',
               fontWeight: 'bold',
-              letterSpacing: '5px',
+              letterSpacing: '0.28em',
               color: '#1a1a1a',
-              lineHeight: 1.15,
+              lineHeight: 1.2,
+              marginBottom: '4px',
             }}>
               EXPENSES
             </div>
             <div style={{
-              fontSize: '26px',
+              fontSize: '28px',
               fontWeight: 'bold',
-              letterSpacing: '7px',
+              letterSpacing: '0.32em',
               color: '#1a1a1a',
-              marginTop: '2px',
+              lineHeight: 1.15,
             }}>
               CALENDAR
             </div>
             <div style={{
               fontSize: '10px',
-              letterSpacing: '0.5px',
-              color: '#777',
+              letterSpacing: '0.08em',
+              color: '#666',
               marginTop: '10px',
-              lineHeight: 1.4,
+              lineHeight: 1.5,
             }}>
-              Daily spending, one day at a time.
+              Track spending by day
             </div>
           </div>
           
@@ -611,7 +649,7 @@ const ReceiptCalendar = () => {
             marginBottom: '8px',
           }}>
             <span>TRX #00{currentDate.getMonth() + 1}{currentDate.getFullYear()}</span>
-            <span>CASHIER: chandu</span>
+            <span>CASHIER: CHANDU</span>
           </div>
           
           {/* Date/Time */}
@@ -628,13 +666,18 @@ const ReceiptCalendar = () => {
             borderTop: '1px solid #ddd',
             margin: '12px 0',
           }} />
-          
+
+          <div
+            onTouchStart={onCalendarSwipeStart}
+            onTouchEnd={onCalendarSwipeEnd}
+            style={{ touchAction: 'pan-y', pointerEvents: isPrinting ? 'none' : 'auto' }}
+          >
           {/* Month navigation */}
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '16px',
+            marginBottom: '8px',
             padding: '8px 0',
             pointerEvents: isPrinting ? 'none' : 'auto',
             opacity: isPrinting ? 0.7 : 1,
@@ -693,6 +736,17 @@ const ReceiptCalendar = () => {
             >
               {'>>'}
             </button>
+          </div>
+
+          <div style={{
+            fontSize: '7px',
+            color: '#888',
+            textAlign: 'center',
+            letterSpacing: '0.04em',
+            marginBottom: '10px',
+            lineHeight: 1.4,
+          }}>
+            Swipe left · next month · swipe right · previous
           </div>
           
           {/* Column headers like receipt items */}
@@ -806,17 +860,13 @@ const ReceiptCalendar = () => {
               );
             })}
           </div>
+          </div>
           
-          {/* Selected day — shown after print; pick another day on the grid to change */}
-          {!isPrinting && selectedDate != null && (() => {
+          {/* Selected Date Section */}
+          {!isPrinting && selectedDate !== null && (() => {
             const selectedHoliday = isHoliday(selectedDate);
             const dateExpenses = getExpensesForDate(selectedDate);
             const dateTotal = getTotalForDate(selectedDate);
-            const todayRef = new Date();
-            const isViewingToday =
-              todayRef.getFullYear() === currentDate.getFullYear() &&
-              todayRef.getMonth() === currentDate.getMonth() &&
-              todayRef.getDate() === selectedDate;
             return (
               <div style={{
                 background: '#e8e5db',
@@ -824,23 +874,8 @@ const ReceiptCalendar = () => {
                 marginTop: '12px',
                 border: '1px dashed #999',
               }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  <div style={{ fontSize: '14px', fontWeight: 'bold', textAlign: 'center' }}>
-                    {months[currentDate.getMonth()]} {selectedDate}, {currentDate.getFullYear()}
-                  </div>
-                  {isViewingToday && (
-                    <span style={{
-                      fontSize: '8px',
-                      fontWeight: 'bold',
-                      letterSpacing: '1px',
-                      color: '#f5f2e8',
-                      background: '#333',
-                      padding: '2px 6px',
-                      borderRadius: '2px',
-                    }}>
-                      TODAY
-                    </span>
-                  )}
+                <div style={{ fontSize: '14px', fontWeight: 'bold' }}>
+                  {months[currentDate.getMonth()]} {selectedDate}, {currentDate.getFullYear()}
                 </div>
                 {selectedHoliday && (
                   <div style={{
@@ -849,7 +884,6 @@ const ReceiptCalendar = () => {
                     marginTop: '6px',
                     fontWeight: 'bold',
                     letterSpacing: '1px',
-                    textAlign: 'center',
                   }}>
                     {selectedHoliday.name.toUpperCase()}
                   </div>
@@ -1009,7 +1043,7 @@ const ReceiptCalendar = () => {
                   )}
 
                   {/* Expense List */}
-                  {dateExpenses.length > 0 ? (
+                  {dateExpenses.length > 0 && (
                     <div>
                       {dateExpenses.map((expense) => (
                         <div key={expense.id} style={{ background: '#fff', padding: '8px', marginBottom: '6px', border: '1px solid #ddd' }}>
@@ -1030,17 +1064,19 @@ const ReceiptCalendar = () => {
                           ))}
                         </div>
                       ))}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 'bold', marginTop: '8px', paddingTop: '8px', borderTop: '2px solid #333' }}>
-                        <span>DAY TOTAL:</span>
-                        <span>₹{dateTotal.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  ) : !showAddExpense && (
-                    <div style={{ fontSize: '10px', color: '#999', textAlign: 'center', padding: '10px', lineHeight: 1.45 }}>
-                      <div style={{ fontWeight: 'bold', color: '#666', marginBottom: '4px' }}>No expenses for this day</div>
-                      Tap + ADD to record a purchase, or pick another day on the calendar above.
                     </div>
                   )}
+                  {!showAddExpense && dateExpenses.length === 0 && (
+                    <div style={{ fontSize: '10px', color: '#888', textAlign: 'center', padding: '12px 8px', lineHeight: 1.5 }}>
+                      No expenses recorded for this day yet.
+                      <br />
+                      <span style={{ color: '#aaa' }}>Tap + ADD to log expenses.</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 'bold', marginTop: '8px', paddingTop: '8px', borderTop: '2px solid #333' }}>
+                    <span>DAY TOTAL:</span>
+                    <span>₹{dateTotal.toFixed(2)}</span>
+                  </div>
                 </div>
               </div>
             );

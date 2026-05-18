@@ -260,7 +260,7 @@ const ReceiptCalendar = () => {
             marginBottom: '8px',
           }}>
             <span>TRX #00{currentDate.getMonth() + 1}{currentDate.getFullYear()}</span>
-            <span>CASHIER: chandu</span>
+            <span>CASHIER: CHANDU</span>
           </div>
           
           {/* Date/Time */}
