@@ -1,12 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 
 // Expense categories
 const CATEGORIES = [
   { id: 'food', name: 'Food & Dining', color: '#4caf50' },
   { id: 'grocery', name: 'Grocery', color: '#8bc34a' },
   { id: 'coffee', name: 'Coffee & Drinks', color: '#795548' },
-  { id: 'rent', name: 'Rent', color: '#3f51b5' },
-  { id: 'subscriptions', name: 'Subscriptions', color: '#00acc1' },
   { id: 'shopping', name: 'Shopping', color: '#e91e63' },
   { id: 'healthcare', name: 'Healthcare', color: '#f44336' },
   { id: 'transport', name: 'Transport', color: '#2196f3' },
@@ -31,14 +29,6 @@ const detectCategory = (storeName) => {
   // Grocery
   if (/whole foods|trader joe|safeway|kroger|walmart|target|costco|grocery|market|fresh|aldi|publix|wegmans|amazon fresh/i.test(name)) {
     return 'grocery';
-  }
-  // Rent
-  if (/\brent\b|landlord|lease|housing society|flat deposit|pg\b|room rent|monthly rent/i.test(name)) {
-    return 'rent';
-  }
-  // Subscriptions (before entertainment — overlaps streaming / software)
-  if (/netflix|spotify|youtube premium|apple music|amazon prime|prime membership|disney\+|hotstar|zee5|sony liv|subscription|recurring|icloud|google one|chatgpt|openai|notion|github|figma|adobe creative|saas/i.test(name)) {
-    return 'subscriptions';
   }
   // Healthcare
   if (/cvs|walgreens|pharmacy|rite aid|drug|medical|doctor|clinic|hospital/i.test(name)) {
@@ -90,8 +80,6 @@ const ReceiptCalendar = () => {
   });
   const [showMonthlyBreakdown, setShowMonthlyBreakdown] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
-
-  const calendarSwipeRef = useRef(null);
 
   // Save expenses to localStorage whenever they change
   useEffect(() => {
@@ -306,10 +294,10 @@ const ReceiptCalendar = () => {
                   'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
   const days = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
   
-  // Printing animation - slow, steady feed (thermal printer feel)
+  // Printing animation - using requestAnimationFrame for smooth 60fps
   useEffect(() => {
     if (isPrinting) {
-      const duration = 12500; // ~12.5s — receipt emerges slowly
+      const duration = 4500; // 4.5 seconds total
       let startTime = null;
       let animationId = null;
 
@@ -318,8 +306,8 @@ const ReceiptCalendar = () => {
         const elapsed = timestamp - startTime;
         const linearProgress = Math.min(elapsed / duration, 1);
 
-        // Gentle ease-in-out so motion stays slow and readable, not abrupt at the end
-        const easedProgress = linearProgress * linearProgress * (3 - 2 * linearProgress);
+        // Very slow start, then gradually speeds up
+        const easedProgress = Math.pow(linearProgress, 3);
         setPrintProgress(easedProgress * 100);
 
         if (linearProgress < 1) {
@@ -393,24 +381,6 @@ const ReceiptCalendar = () => {
     const d = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
     setCurrentDate(d);
     setSelectedDate(defaultSelectedDayForMonth(d.getFullYear(), d.getMonth()));
-  };
-
-  const onCalendarSwipeStart = (e) => {
-    if (isPrinting) return;
-    const t = e.touches[0];
-    calendarSwipeRef.current = { x0: t.clientX, y0: t.clientY };
-  };
-
-  const onCalendarSwipeEnd = (e) => {
-    if (isPrinting || !calendarSwipeRef.current) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - calendarSwipeRef.current.x0;
-    const dy = t.clientY - calendarSwipeRef.current.y0;
-    calendarSwipeRef.current = null;
-    const minSwipe = 48;
-    if (Math.abs(dx) < minSwipe || Math.abs(dx) < Math.abs(dy) * 1.15) return;
-    if (dx < 0) nextMonth();
-    else prevMonth();
   };
   
   const isToday = (day) => {
@@ -659,12 +629,6 @@ const ReceiptCalendar = () => {
             margin: '12px 0',
           }} />
           
-          {/* Calendar (month + grid): swipe horizontally on touch to change month */}
-          <div
-            style={{ touchAction: 'pan-y' }}
-            onTouchStart={onCalendarSwipeStart}
-            onTouchEnd={onCalendarSwipeEnd}
-          >
           {/* Month navigation */}
           <div style={{
             display: 'flex',
@@ -842,7 +806,6 @@ const ReceiptCalendar = () => {
               );
             })}
           </div>
-          </div>
           
           {/* Selected day — shown after print; pick another day on the grid to change */}
           {!isPrinting && selectedDate != null && (() => {
@@ -861,28 +824,19 @@ const ReceiptCalendar = () => {
                 marginTop: '12px',
                 border: '1px dashed #999',
               }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexWrap: 'wrap',
-                  gap: '6px',
-                  textAlign: 'center',
-                }}>
-                  <span style={{ fontSize: '14px', fontWeight: 'bold', lineHeight: 1.3 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: '14px', fontWeight: 'bold', textAlign: 'center' }}>
                     {months[currentDate.getMonth()]} {selectedDate}, {currentDate.getFullYear()}
-                  </span>
+                  </div>
                   {isViewingToday && (
                     <span style={{
-                      fontSize: '7px',
+                      fontSize: '8px',
                       fontWeight: 'bold',
-                      letterSpacing: '0.12em',
+                      letterSpacing: '1px',
                       color: '#f5f2e8',
                       background: '#333',
-                      padding: '4px 8px',
-                      borderRadius: '3px',
-                      lineHeight: 1,
-                      flexShrink: 0,
+                      padding: '2px 6px',
+                      borderRadius: '2px',
                     }}>
                       TODAY
                     </span>
@@ -984,7 +938,7 @@ const ReceiptCalendar = () => {
                             border: '1px dashed #999',
                             borderTop: 'none',
                             zIndex: 100,
-                            maxHeight: '200px',
+                            maxHeight: '150px',
                             overflowY: 'auto',
                           }}>
                             {CATEGORIES.map(cat => (
