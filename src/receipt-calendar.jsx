@@ -738,21 +738,6 @@ const ReceiptCalendar = () => {
             </button>
           </div>
           
-          {/* Column headers like receipt items */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            fontSize: '10px',
-            color: '#666',
-            borderBottom: '1px dashed #999',
-            paddingBottom: '4px',
-            marginBottom: '8px',
-          }}>
-            <span>ITEM</span>
-            <span>QTY</span>
-            <span>PRICE</span>
-          </div>
-          
           {/* Day headers */}
           <div style={{
             display: 'grid',
