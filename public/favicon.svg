@@ -1,10 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Printer emoji U+1F5A8 + U+FE0F (numeric refs avoid encoding corruption in tooling) -->
   <text
-    x="50"
-    y="54"
+    x="16"
+    y="23"
     text-anchor="middle"
-    dominant-baseline="middle"
-    font-size="56"
+    font-size="20"
     font-family="Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif"
-  >=¨</text>
+  >&#x1F5A8;&#xFE0F;</text>
 </svg>

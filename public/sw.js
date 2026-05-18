@@ -1,4 +1,4 @@
-const CACHE_NAME = 'expenses-calendar-v2-root';
+const CACHE_NAME = 'expenses-calendar-v3-root';
 const urlsToCache = [
   '/',
   '/index.html',
